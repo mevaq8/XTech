@@ -35,6 +35,7 @@ export default function ProductForm() {
   const [mainImage, setMainImage] = useState<UploadItem[]>([]);
   const [additionalImages, setAdditionalImages] = useState<UploadItem[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [generalError, setGeneralError] = useState<string | null>(null);
 
   const editor = useEditor({
     extensions: [StarterKit, Placeholder.configure({ placeholder: "Məhsul təsviri əlavə edin..." })],
@@ -80,25 +81,34 @@ export default function ProductForm() {
   const toolbarButtonClass = "rounded-lg border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50";
   const descriptionHtml = useMemo(() => editor?.getHTML() ?? "", [editor]);
 
-  const uploadFiles = async (productId: string) => {
+  const uploadImages = async (productId: string) => {
     const supabase = getSupabaseClient();
-    const uploadSingle = async (item: UploadItem, prefix: string) => {
+    const uploadSingle = async (item: UploadItem) => {
       if (!item.file) return item.url;
-      const filename = `${Date.now()}-${item.file.name}`;
-      const path = `products/${productId}/${prefix}-${filename}`;
-      const { error } = await supabase.storage.from("product-images").upload(path, item.file, { upsert: true });
-      if (error) throw error;
-      const { data } = supabase.storage.from("product-images").getPublicUrl(path);
-      return data.publicUrl;
+
+      const timestamp = Date.now();
+      const filename = `${timestamp}-${item.file.name}`;
+      const path = `products/${productId}/${filename}`;
+
+      const { error: uploadError } = await supabase.storage.from("product-images").upload(path, item.file, { upsert: true });
+      if (uploadError) throw uploadError;
+
+      const { data: publicUrlData, error: urlError } = supabase.storage.from("product-images").getPublicUrl(path);
+      if (urlError) throw urlError;
+      if (!publicUrlData?.publicUrl) throw new Error("Public URL alınmadı");
+
+      return publicUrlData.publicUrl;
     };
 
-    const main = mainImage[0] ? await uploadSingle(mainImage[0], "main") : "";
-    const additional = await Promise.all(additionalImages.map((item) => uploadSingle(item, "extra")));
-    return { main, additional };
+    const mainUrl = await uploadSingle(mainImage[0]);
+    const additionalUrls = await Promise.all(additionalImages.map((item) => uploadSingle(item)));
+    return {
+      mainUrl,
+      additionalUrls: additionalUrls.filter(Boolean),
+    };
   };
 
   const handleSubmit = async (e: FormEvent) => {
-    const supabase = getSupabaseClient();
     e.preventDefault();
     const parsed = schema.safeParse({
       name,
@@ -107,6 +117,7 @@ export default function ProductForm() {
       discount_price: discountPrice ? Number(discountPrice) : undefined,
       stock: Number(stock),
     });
+    setGeneralError(null);
     if (!mainImage.length) {
       setErrors({ main_image: "Əsas şəkil tələb olunur" });
       return;
@@ -124,36 +135,54 @@ export default function ProductForm() {
 
     setSaving(true);
     setErrors({});
+    try {
+      const supabase = getSupabaseClient();
 
-    const payload = {
-      name: parsed.data.name,
-      category_id: parsed.data.category_id,
-      price: parsed.data.price,
-      discount_price: discountPrice ? Number(discountPrice) : null,
-      stock: parsed.data.stock,
-      description: descriptionHtml,
-      is_active: isActive,
-    };
+      const productId = isEdit && id ? id : crypto.randomUUID();
 
-    let productId = id ?? "";
-    if (isEdit && id) {
-      await supabase.from("products").update(payload).eq("id", id);
-    } else {
-      const insertRes = await supabase.from("products").insert(payload).select("id").single();
-      productId = insertRes.data?.id as string;
+      // 1) Şəkilləri ƏVVƏLCƏ yükləyirik ki, şəkil alınmasa məhsul DB-ə düşməsin.
+      let uploadedMain: string;
+      let uploadedAdditional: string[];
+      try {
+        const uploaded = await uploadImages(productId);
+        uploadedMain = uploaded.mainUrl;
+        uploadedAdditional = uploaded.additionalUrls;
+      } catch (_err) {
+        setGeneralError("Şəkil yüklənmədi, yenidən cəhd edin");
+        return;
+      }
+
+      const payload = {
+        id: isEdit ? productId : productId,
+        name: parsed.data.name,
+        category_id: parsed.data.category_id,
+        price: parsed.data.price,
+        discount_price: discountPrice ? Number(discountPrice) : null,
+        stock: parsed.data.stock,
+        description: descriptionHtml,
+        is_active: isActive,
+        main_image: uploadedMain,
+        additional_images: uploadedAdditional,
+      };
+
+      if (isEdit) {
+        await supabase.from("products").update(payload).eq("id", productId);
+      } else {
+        const insertRes = await supabase.from("products").insert(payload).select("id").single();
+        if (!insertRes.data?.id) {
+          setGeneralError("Məhsul əlavə edilmədi");
+          return;
+        }
+      }
+
+      const toastMessage = isEdit ? "Məhsul yeniləndi" : "Məhsul əlavə edildi";
+      navigate("/admin/products", { state: { toast: toastMessage } });
+    } catch (_err) {
+      // Yalnız insert zamanı xüsusi mesaj tələb olunur; update zamanı isə generic saxlayırıq.
+      if (!isEdit) setGeneralError("Məhsul əlavə edilmədi");
+    } finally {
+      setSaving(false);
     }
-
-    const uploaded = await uploadFiles(productId);
-    await supabase
-      .from("products")
-      .update({
-        main_image: uploaded.main || mainImage[0]?.url || null,
-        additional_images: uploaded.additional.filter(Boolean),
-      })
-      .eq("id", productId);
-
-    setSaving(false);
-    navigate("/admin/products");
   };
 
   if (loading) {
@@ -174,6 +203,7 @@ export default function ProductForm() {
           </button>
         </div>
       </div>
+      {generalError ? <p className="text-sm text-red-600">{generalError}</p> : null}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-4">

@@ -6,6 +6,7 @@ import CategoryForm from "@/components/admin/CategoryForm";
 import ConfirmDialog from "@/components/admin/common/ConfirmDialog";
 import EmptyState from "@/components/admin/common/EmptyState";
 import { SkeletonTable } from "@/components/admin/common/Skeleton";
+import Toast from "@/components/admin/common/Toast";
 
 export default function CategoryList() {
   const [loading, setLoading] = useState(true);
@@ -15,6 +16,7 @@ export default function CategoryList() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<AdminCategory | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
 
   const loadData = async () => {
     const supabase = getSupabaseClient();
@@ -31,15 +33,21 @@ export default function CategoryList() {
   const saveCategory = async (payload: { name: string; slug: string }) => {
     const supabase = getSupabaseClient();
     setSaving(true);
-    if (editing) {
-      await supabase.from("categories").update(payload).eq("id", editing.id);
-    } else {
-      await supabase.from("categories").insert(payload);
+    try {
+      const message = editing ? "Kateqoriya yeniləndi" : "Kateqoriya əlavə edildi";
+      if (editing) {
+        await supabase.from("categories").update(payload).eq("id", editing.id);
+      } else {
+        await supabase.from("categories").insert(payload);
+      }
+
+      setFormOpen(false);
+      setEditing(null);
+      await loadData();
+      setToast(message);
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
-    setFormOpen(false);
-    setEditing(null);
-    await loadData();
   };
 
   const deleteCategory = async () => {
@@ -140,6 +148,7 @@ export default function CategoryList() {
         onCancel={() => setDeleting(null)}
         onConfirm={deleteCategory}
       />
+      {toast ? <Toast message={toast} onClose={() => setToast(null)} /> : null}
     </div>
   );
 }

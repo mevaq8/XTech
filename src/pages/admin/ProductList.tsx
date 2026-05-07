@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase";
 import type { AdminProduct } from "@/types/admin";
 import ConfirmDialog from "@/components/admin/common/ConfirmDialog";
 import EmptyState from "@/components/admin/common/EmptyState";
 import { SkeletonTable } from "@/components/admin/common/Skeleton";
+import Toast from "@/components/admin/common/Toast";
 
 function stockBadge(stock: number) {
   if (stock <= 0) return "bg-red-100 text-red-700";
@@ -26,6 +27,8 @@ export default function ProductList() {
   const [products, setProducts] = useState<AdminProduct[]>([]);
   const [deleting, setDeleting] = useState<AdminProduct | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  const location = useLocation();
 
   const load = async () => {
     const supabase = getSupabaseClient();
@@ -41,6 +44,11 @@ export default function ProductList() {
   useEffect(() => {
     load();
   }, []);
+
+  useEffect(() => {
+    const stateToast = (location.state as { toast?: string } | null)?.toast ?? null;
+    if (stateToast) setToast(stateToast);
+  }, [location.state]);
 
   const removeProduct = async () => {
     if (!deleting) return;
@@ -122,6 +130,7 @@ export default function ProductList() {
         onCancel={() => setDeleting(null)}
         onConfirm={removeProduct}
       />
+      {toast ? <Toast message={toast} onClose={() => setToast(null)} /> : null}
     </div>
   );
 }
