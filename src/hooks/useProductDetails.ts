@@ -36,14 +36,29 @@ export function useProductDetails(productId?: string) {
         .eq("is_active", true)
         .maybeSingle();
 
-      if (productRes.error || !productRes.data) {
-        setProduct(null);
-        setLoading(false);
-        if (productRes.error) setError(productRes.error.message);
-        return;
+      let row: any = null;
+      if (!productRes.error && productRes.data) {
+        row = productRes.data as any;
+      } else {
+        const basicRes = await supabase
+          .from("products")
+          .select("id,name,description,price,category_id,stock,is_active")
+          .eq("id", productId)
+          .eq("is_active", true)
+          .maybeSingle();
+        if (basicRes.error || !basicRes.data) {
+          setProduct(null);
+          setLoading(false);
+          if (basicRes.error) setError(basicRes.error.message);
+          return;
+        }
+        let categoryData: any = null;
+        if (basicRes.data.category_id) {
+          const catRes = await supabase.from("categories").select("name,slug").eq("id", basicRes.data.category_id).maybeSingle();
+          if (!catRes.error) categoryData = catRes.data;
+        }
+        row = { ...basicRes.data, images: [], attributes: null, categories: categoryData };
       }
-
-      const row = productRes.data as any;
       const images = (row.images ?? []) as string[];
       setProduct({
         id: row.id,
@@ -72,7 +87,7 @@ export function useProductDetails(productId?: string) {
         .from("product_attributes")
         .select("attribute_name,attribute_value")
         .eq("product_id", productId);
-      const attrRows = (attrsRes.data ?? []) as AttributeRow[];
+      const attrRows = attrsRes.error ? [] : ((attrsRes.data ?? []) as AttributeRow[]);
       const fromTable = attrRows.reduce<Record<string, string>>((acc, item) => {
         acc[item.attribute_name] = item.attribute_value;
         return acc;

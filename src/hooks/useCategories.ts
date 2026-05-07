@@ -33,19 +33,34 @@ export function useCategories() {
 
     const loadCategories = async () => {
       setLoading(true);
-      const { data, error: fetchError } = await supabase
+      const fullRes = await supabase
         .from("categories")
         .select("id,name,slug,image,is_active,created_at")
         .eq("is_active", true)
         .order("created_at", { ascending: false });
-
-      if (fetchError) {
-        setError(fetchError.message);
+      if (!fullRes.error) {
+        setCategories([ALL_CATEGORY, ...((fullRes.data ?? []) as HomeCategory[])]);
+        setError(null);
         setLoading(false);
         return;
       }
 
-      setCategories([ALL_CATEGORY, ...((data ?? []) as HomeCategory[])]);
+      // Fallback for schemas without image/is_active/created_at columns.
+      const basicRes = await supabase.from("categories").select("id,name,slug").order("name");
+      if (basicRes.error) {
+        setError(basicRes.error.message);
+        setLoading(false);
+        return;
+      }
+
+      const normalized = (basicRes.data ?? []).map((row: any) => ({
+        id: row.id,
+        name: row.name,
+        slug: row.slug,
+        image: null,
+        is_active: true,
+      })) as HomeCategory[];
+      setCategories([ALL_CATEGORY, ...normalized]);
       setError(null);
       setLoading(false);
     };
@@ -53,7 +68,7 @@ export function useCategories() {
     loadCategories();
 
     const channel = supabase
-      .channel("categories-realtime")
+      .channel(`categories-realtime-${Math.random().toString(36).slice(2)}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "categories" },

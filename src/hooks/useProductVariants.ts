@@ -41,7 +41,7 @@ export function useProductVariants(productIds: string[]) {
     loadVariants();
 
     const variantsChannel = supabase
-      .channel("product-variants-realtime")
+      .channel(`product-variants-realtime-${Math.random().toString(36).slice(2)}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "product_variants" }, () => {
         loadVariants();
       })

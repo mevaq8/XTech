@@ -13,10 +13,7 @@ interface ProductRow {
   images: string[] | null;
   created_at: string;
   attributes?: Record<string, string> | null;
-  categories?: {
-    name?: string;
-    slug?: string;
-  } | null;
+  categories?: { name?: string; slug?: string } | null;
 }
 
 function toProduct(row: ProductRow): Product {
@@ -68,14 +65,47 @@ export function useProducts({ activeCategory, searchQuery }: { activeCategory: s
         .order("created_at", { ascending: false });
 
       if (categoryId) query = query.eq("category_id", categoryId);
-      const { data, error: fetchError } = await query;
-      if (fetchError) {
-        setError(fetchError.message);
+      const fullRes = await query;
+      if (!fullRes.error) {
+        setProducts(((fullRes.data ?? []) as ProductRow[]).map(toProduct));
+        setError(null);
         setLoading(false);
         return;
       }
 
-      setProducts(((data ?? []) as ProductRow[]).map(toProduct));
+      // Fallback for schemas without attributes/images relation aliases.
+      let fallbackQuery = supabase
+        .from("products")
+        .select("id,name,description,price,category_id,is_active,stock,created_at")
+        .eq("is_active", true)
+        .order("created_at", { ascending: false });
+      if (categoryId) fallbackQuery = fallbackQuery.eq("category_id", categoryId);
+      const basicRes = await fallbackQuery;
+      if (basicRes.error) {
+        setError(basicRes.error.message);
+        setLoading(false);
+        return;
+      }
+
+      const categoryIds = Array.from(new Set((basicRes.data ?? []).map((row: any) => row.category_id).filter(Boolean)));
+      let categoryMap: Record<string, { name?: string; slug?: string }> = {};
+      if (categoryIds.length) {
+        const catRes = await supabase.from("categories").select("id,name,slug").in("id", categoryIds);
+        if (!catRes.error) {
+          categoryMap = (catRes.data ?? []).reduce<Record<string, { name?: string; slug?: string }>>((acc, item: any) => {
+            acc[item.id] = { name: item.name, slug: item.slug };
+            return acc;
+          }, {});
+        }
+      }
+
+      const normalized = (basicRes.data ?? []).map((row: any) => ({
+        ...row,
+        images: [],
+        attributes: null,
+        categories: row.category_id ? categoryMap[row.category_id] ?? null : null,
+      })) as ProductRow[];
+      setProducts(normalized.map(toProduct));
       setError(null);
       setLoading(false);
     };
@@ -83,7 +113,7 @@ export function useProducts({ activeCategory, searchQuery }: { activeCategory: s
     loadProducts();
 
     const productsChannel = supabase
-      .channel("products-realtime")
+      .channel(`products-realtime-${Math.random().toString(36).slice(2)}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "products" }, () => {
         loadProducts();
       })
