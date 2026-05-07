@@ -1,9 +1,15 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import CubePlaceholder from "./CubePlaceholder";
 import { useCart } from "@/store/cart-store";
 import type { Product, ProductVariant } from "@/types";
+
+const PLACEHOLDER_IMAGE = "https://via.placeholder.com/400x400?text=No+Image";
+
+function truncateText(text: string, max = 150) {
+  if (text.length <= max) return text;
+  return `${text.slice(0, max).trimEnd()}...`;
+}
 
 export default function ProductCard({ product, variants = [] }: { product: Product; variants?: ProductVariant[] }) {
   const { add } = useCart();
@@ -12,8 +18,13 @@ export default function ProductCard({ product, variants = [] }: { product: Produ
     () => variants.find((variant) => variant.id === selectedVariantId) ?? variants[0],
     [selectedVariantId, variants]
   );
-  const finalPrice = Number(product.price ?? 0) + Number(selectedVariant?.price_adjustment ?? 0);
+  const basePrice = Number(product.sale_price ?? product.price ?? 0);
+  const finalPrice = basePrice + Number(selectedVariant?.price_adjustment ?? 0);
   const currentStock = selectedVariant ? Number(selectedVariant.stock ?? 0) : Number(product.stock ?? 0);
+  const originalPrice = Number(product.price ?? 0) + Number(selectedVariant?.price_adjustment ?? 0);
+  const hasSale = typeof product.sale_price === "number" && product.sale_price > 0 && product.sale_price < product.price;
+  const discountPercent = hasSale ? Math.round(((originalPrice - finalPrice) / originalPrice) * 100) : 0;
+  const description = truncateText(product.description ?? product.shortDescription ?? "Məhsul məlumatı", 150);
 
   const cartProduct: Product = {
     ...product,
@@ -36,11 +47,16 @@ export default function ProductCard({ product, variants = [] }: { product: Produ
         <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_12px_40px_rgba(15,23,42,0.1)] h-full">
           <div className="relative aspect-[4/3] bg-slate-50 flex items-center justify-center overflow-hidden">
             {product.main_image ? (
-              <img src={product.main_image} alt={product.name} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
+              <img
+                src={product.main_image}
+                alt={product.name}
+                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                onError={(e) => {
+                  e.currentTarget.src = PLACEHOLDER_IMAGE;
+                }}
+              />
             ) : (
-              <div className="w-3/5 h-3/5 transition-transform duration-300 group-hover:scale-105">
-                <CubePlaceholder />
-              </div>
+              <img src={PLACEHOLDER_IMAGE} alt="No image" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
             )}
           </div>
           <div className="p-4 h-full flex flex-col">
@@ -51,7 +67,7 @@ export default function ProductCard({ product, variants = [] }: { product: Produ
               {product.name}
             </h3>
             <p className="text-xs text-slate-500 font-inter mb-3 line-clamp-1">
-              {product.shortDescription ?? product.description ?? "Məhsul məlumatı"}
+              {description}
             </p>
             {variants.length > 0 ? (
               <div className="mb-3">
@@ -74,9 +90,17 @@ export default function ProductCard({ product, variants = [] }: { product: Produ
               </div>
             ) : null}
             <div className="mt-auto flex items-center justify-between gap-2">
-              <span className="font-sora font-bold text-primary text-base">
-                {finalPrice.toLocaleString("az-AZ")} <span className="text-sm font-medium text-slate-400">AZN</span>
-              </span>
+              <div className="flex flex-col gap-1">
+                {hasSale ? (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-slate-400 line-through">{originalPrice.toLocaleString("az-AZ")} AZN</span>
+                    <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-700">-{discountPercent}%</span>
+                  </div>
+                ) : null}
+                <span className={`font-sora font-bold text-base ${hasSale ? "text-red-600" : "text-primary"}`}>
+                  {finalPrice.toLocaleString("az-AZ")} <span className="text-sm font-medium text-slate-400">AZN</span>
+                </span>
+              </div>
               <button
                 onClick={(e) => {
                   e.preventDefault();

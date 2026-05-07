@@ -31,7 +31,7 @@ export function useProductDetails(productId?: string) {
 
       const productRes = await supabase
         .from("products")
-        .select("id,name,description,price,category_id,stock,images,attributes,is_active,categories(name,slug)")
+        .select("id,name,description,price,sale_price,category_id,stock,images,attributes,is_active,categories(name,slug)")
         .eq("id", productId)
         .eq("is_active", true)
         .maybeSingle();
@@ -67,6 +67,7 @@ export function useProductDetails(productId?: string) {
         description: row.description ?? "",
         shortDescription: (row.description ?? "").slice(0, 120),
         price: Number(row.price ?? 0),
+        sale_price: row.sale_price ?? row.discount_price ?? null,
         stock: Number(row.stock ?? 0),
         category: row.categories?.slug ?? "other",
         category_id: row.category_id ?? undefined,
@@ -100,6 +101,23 @@ export function useProductDetails(productId?: string) {
     };
 
     load();
+
+    const productsChannel = supabase
+      .channel(`product-detail-${productId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "products", filter: `id=eq.${productId}` }, () => {
+        load();
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "product_variants", filter: `product_id=eq.${productId}` }, () => {
+        load();
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "product_attributes", filter: `product_id=eq.${productId}` }, () => {
+        load();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(productsChannel);
+    };
   }, [productId]);
 
   const groupedVariants = useMemo(() => {

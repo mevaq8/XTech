@@ -15,7 +15,7 @@ const schema = z.object({
   name: z.string().trim().min(1, "Məhsul adı tələb olunur"),
   category_id: z.string().trim().min(1, "Kateqoriya tələb olunur"),
   price: z.number().positive("Qiymət müsbət ədəd olmalıdır"),
-  discount_price: z.number().optional(),
+  sale_price: z.number().optional(),
   stock: z.number().min(0, "Stok sayı mənfi ola bilməz"),
 });
 
@@ -51,25 +51,38 @@ export default function ProductForm() {
     const load = async () => {
       const supabase = getSupabaseClient();
       setLoading(true);
-      const categoriesRes = await supabase.from("categories").select("id,name,slug").order("name");
+      const categoriesRes = await supabase
+        .from("categories")
+        .select("id,name,slug")
+        .order("sort_order", { ascending: true })
+        .order("name", { ascending: true });
       setCategories((categoriesRes.data ?? []) as AdminCategory[]);
 
       if (isEdit && id) {
-        const { data } = await supabase
+        const fullRes = await supabase
           .from("products")
-          .select("id,name,category_id,price,discount_price,stock,description,is_active,main_image,additional_images")
+          .select("id,name,category_id,price,sale_price,stock,description,is_active,images")
           .eq("id", id)
           .single();
-        const product = data as AdminProduct | null;
+        let product = fullRes.data as AdminProduct | null;
+        if (fullRes.error) {
+          const fallbackRes = await supabase
+            .from("products")
+            .select("id,name,category_id,price,discount_price,stock,description,is_active,main_image,additional_images")
+            .eq("id", id)
+            .single();
+          product = fallbackRes.data as AdminProduct | null;
+        }
         if (product) {
           setName(product.name ?? "");
           setCategoryId(product.category_id ?? "");
           setPrice(String(product.price ?? ""));
-          setDiscountPrice(product.discount_price ? String(product.discount_price) : "");
+          setDiscountPrice(product.sale_price ? String(product.sale_price) : product.discount_price ? String(product.discount_price) : "");
           setStock(String(product.stock ?? 0));
           setIsActive(Boolean(product.is_active));
-          setMainImage(product.main_image ? [{ url: product.main_image }] : []);
-          setAdditionalImages((product.additional_images ?? []).map((url) => ({ url })));
+          const productImages = product.images ?? [product.main_image, ...(product.additional_images ?? [])].filter(Boolean);
+          setMainImage(productImages[0] ? [{ url: productImages[0] }] : []);
+          setAdditionalImages(productImages.slice(1).map((url) => ({ url })));
           editor?.commands.setContent(product.description ?? "");
         }
       }
@@ -114,7 +127,7 @@ export default function ProductForm() {
       name,
       category_id: categoryId,
       price: Number(price),
-      discount_price: discountPrice ? Number(discountPrice) : undefined,
+      sale_price: discountPrice ? Number(discountPrice) : undefined,
       stock: Number(stock),
     });
     setGeneralError(null);
@@ -153,14 +166,16 @@ export default function ProductForm() {
       }
 
       const payload = {
-        id: isEdit ? productId : productId,
+        id: productId,
         name: parsed.data.name,
         category_id: parsed.data.category_id,
         price: parsed.data.price,
+        sale_price: discountPrice ? Number(discountPrice) : null,
         discount_price: discountPrice ? Number(discountPrice) : null,
         stock: parsed.data.stock,
         description: descriptionHtml,
         is_active: isActive,
+        images: [uploadedMain, ...uploadedAdditional],
         main_image: uploadedMain,
         additional_images: uploadedAdditional,
       };

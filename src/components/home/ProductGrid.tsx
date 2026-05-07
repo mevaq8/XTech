@@ -7,7 +7,7 @@ import ProductCard from "@/components/shared/ProductCard";
 
 export default function ProductGrid() {
   const { searchQuery, activeCategory } = useFilter();
-  const { products, loading } = useProducts({ activeCategory, searchQuery });
+  const { products, loading, error } = useProducts({ activeCategory, searchQuery });
   const productIds = useMemo(() => products.map((p) => p.id), [products]);
   const { byProductId } = useProductVariants(productIds);
 
@@ -20,6 +20,10 @@ export default function ProductGrid() {
           {loading ? (
             <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="text-center py-20">
               <p className="text-slate-400 font-inter text-base">Məhsullar yüklənir...</p>
+            </motion.div>
+          ) : error ? (
+            <motion.div key="error" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="text-center py-20">
+              <p className="text-red-500 font-inter text-base">Məhsullar yüklənmədi: {error}</p>
             </motion.div>
           ) : filtered.length === 0 ? (
             <motion.div

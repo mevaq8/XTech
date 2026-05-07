@@ -4,7 +4,7 @@ import { useCategories } from "@/hooks/useCategories";
 
 export default function CategoryNav() {
   const { activeCategory, setActiveCategory } = useFilter();
-  const { categories, loading } = useCategories();
+  const { categories, loading, error } = useCategories();
 
   return (
     <section id="products" className="py-4 bg-bg sticky top-[64px] lg:top-[72px] z-40">
@@ -13,6 +13,7 @@ export default function CategoryNav() {
           {loading ? (
             <div className="px-4 py-2 text-sm text-slate-500">Kateqoriyalar yüklənir...</div>
           ) : null}
+          {error ? <div className="px-4 py-2 text-sm text-red-500">Kateqoriyalar alınmadı: {error}</div> : null}
           {categories.map((cat) => (
             <button
               key={cat.slug}

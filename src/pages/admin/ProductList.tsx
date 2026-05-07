@@ -33,11 +33,24 @@ export default function ProductList() {
   const load = async () => {
     const supabase = getSupabaseClient();
     setLoading(true);
-    const { data } = await supabase
+    const fullRes = await supabase
       .from("products")
-      .select("id,name,price,stock,is_active,main_image,category_id,categories(name)")
+      .select("id,name,price,sale_price,stock,is_active,images,category_id,categories(name)")
       .order("created_at", { ascending: false });
-    setProducts((data ?? []) as AdminProduct[]);
+    if (!fullRes.error) {
+      const normalized = ((fullRes.data ?? []) as AdminProduct[]).map((item) => ({
+        ...item,
+        main_image: item.images?.[0] ?? null,
+      }));
+      setProducts(normalized);
+      setLoading(false);
+      return;
+    }
+    const fallbackRes = await supabase
+      .from("products")
+      .select("id,name,price,discount_price,stock,is_active,main_image,category_id,categories(name)")
+      .order("created_at", { ascending: false });
+    setProducts((fallbackRes.data ?? []) as AdminProduct[]);
     setLoading(false);
   };
 

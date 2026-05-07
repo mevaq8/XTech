@@ -1,6 +1,7 @@
 import { useParams, Navigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useProductDetails } from "@/hooks/useProductDetails";
+import { useProductImages } from "@/hooks/useProductImages";
 import ProductGallery from "@/components/product/ProductGallery";
 import ProductInfo from "@/components/product/ProductInfo";
 import ProductSpecs from "@/components/product/ProductSpecs";
@@ -8,6 +9,7 @@ import ProductSpecs from "@/components/product/ProductSpecs";
 export default function ProductPage() {
   const { slug } = useParams<{ slug: string }>();
   const { product, variants, attributes, loading } = useProductDetails(slug);
+  const { images } = useProductImages(product?.id, product?.images ?? []);
 
   if (loading) {
     return (
@@ -30,7 +32,7 @@ export default function ProductPage() {
     >
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12">
-          <ProductGallery image={product.main_image} name={product.name} />
+          <ProductGallery images={images} name={product.name} />
           <div className="space-y-6">
             <ProductInfo product={product} variants={variants} />
             {Object.keys(attributes).length ? <ProductSpecs specs={attributes} /> : null}

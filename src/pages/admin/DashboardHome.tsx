@@ -5,6 +5,8 @@ import { getSupabaseClient } from "@/lib/supabase";
 import type { AdminProduct } from "@/types/admin";
 import EmptyState from "@/components/admin/common/EmptyState";
 import { SkeletonCard, SkeletonImage } from "@/components/admin/common/Skeleton";
+import Toast from "@/components/admin/common/Toast";
+import { seedDatabase } from "@/db/seed";
 
 interface Stats {
   total: number;
@@ -17,17 +19,21 @@ export default function DashboardHome() {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<Stats>({ total: 0, active: 0, outOfStock: 0, categories: 0 });
   const [latest, setLatest] = useState<AdminProduct[]>([]);
+  const [toast, setToast] = useState<string | null>(null);
+  const [seedLoading, setSeedLoading] = useState(false);
 
-  useEffect(() => {
-    const load = async () => {
+  const load = async () => {
       const supabase = getSupabaseClient();
       setLoading(true);
       const [productsRes, categoriesRes] = await Promise.all([
-        supabase.from("products").select("id,name,price,stock,is_active,main_image,created_at").order("created_at", { ascending: false }),
+        supabase.from("products").select("id,name,price,sale_price,stock,is_active,images,main_image,created_at").order("created_at", { ascending: false }),
         supabase.from("categories").select("id"),
       ]);
 
-      const products = (productsRes.data ?? []) as AdminProduct[];
+      const products = ((productsRes.data ?? []) as AdminProduct[]).map((item) => ({
+        ...item,
+        main_image: item.main_image ?? item.images?.[0] ?? null,
+      }));
       setLatest(products.slice(0, 5));
       setStats({
         total: products.length,
@@ -36,9 +42,37 @@ export default function DashboardHome() {
         categories: (categoriesRes.data ?? []).length,
       });
       setLoading(false);
+  };
+
+  useEffect(() => {
+    const bootstrap = async () => {
+      const supabase = getSupabaseClient();
+      const productsCount = await supabase.from("products").select("id", { count: "exact", head: true });
+      if ((productsCount.count ?? 0) === 0) {
+        try {
+          await seedDatabase(false);
+          setToast("Nümunə məlumatlar əlavə edildi");
+        } catch (_err) {
+          setToast("Nümunə məlumat əlavə edilərkən xəta oldu");
+        }
+      }
+      await load();
     };
-    load();
+    bootstrap();
   }, []);
+
+  const handleSeed = async () => {
+    setSeedLoading(true);
+    try {
+      await seedDatabase(true);
+      await load();
+      setToast("Nümunə məlumatlar yenidən əlavə edildi");
+    } catch (_err) {
+      setToast("Seed əməliyyatı alınmadı");
+    } finally {
+      setSeedLoading(false);
+    }
+  };
 
   const cards = [
     { title: "Ümumi məhsul", value: stats.total, icon: Package },
@@ -73,6 +107,14 @@ export default function DashboardHome() {
         <Link to="/admin/settings" className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">
           Parametrləri aç
         </Link>
+        <button
+          type="button"
+          disabled={seedLoading}
+          onClick={handleSeed}
+          className="rounded-xl border border-emerald-300 px-4 py-2 text-sm text-emerald-700 hover:bg-emerald-50 disabled:opacity-70"
+        >
+          {seedLoading ? "Əlavə edilir..." : "Nümunə məlumatları əlavə et"}
+        </button>
       </div>
 
       <div className="rounded-2xl border border-slate-200 bg-white">
@@ -110,6 +152,7 @@ export default function DashboardHome() {
           )}
         </div>
       </div>
+      {toast ? <Toast message={toast} onClose={() => setToast(null)} /> : null}
     </div>
   );
 }

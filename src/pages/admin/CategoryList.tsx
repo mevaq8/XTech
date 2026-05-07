@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Pencil, Plus, Trash2 } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase";
 import type { AdminCategory } from "@/types/admin";
 import CategoryForm from "@/components/admin/CategoryForm";
@@ -21,10 +21,36 @@ export default function CategoryList() {
   const loadData = async () => {
     const supabase = getSupabaseClient();
     setLoading(true);
-    const { data } = await supabase.from("categories").select("id,name,slug").order("name");
-    setCategories((data ?? []) as AdminCategory[]);
+    const fullRes = await supabase
+      .from("categories")
+      .select("id,name,slug,image,is_active,sort_order")
+      .order("sort_order", { ascending: true })
+      .order("name", { ascending: true });
+    if (!fullRes.error) {
+      setCategories((fullRes.data ?? []) as AdminCategory[]);
+      setLoading(false);
+      return;
+    }
+    const basicRes = await supabase.from("categories").select("id,name,slug").order("name", { ascending: true });
+    setCategories((basicRes.data ?? []) as AdminCategory[]);
     setLoading(false);
   };
+  const moveCategory = async (category: AdminCategory, direction: "up" | "down") => {
+    const supabase = getSupabaseClient();
+    const ordered = [...categories].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+    const currentIndex = ordered.findIndex((item) => item.id === category.id);
+    if (currentIndex < 0) return;
+    const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+    if (targetIndex < 0 || targetIndex >= ordered.length) return;
+    const current = ordered[currentIndex];
+    const target = ordered[targetIndex];
+    const currentOrder = current.sort_order ?? currentIndex + 1;
+    const targetOrder = target.sort_order ?? targetIndex + 1;
+    await supabase.from("categories").update({ sort_order: targetOrder }).eq("id", current.id);
+    await supabase.from("categories").update({ sort_order: currentOrder }).eq("id", target.id);
+    await loadData();
+  };
+
 
   useEffect(() => {
     loadData();
@@ -109,6 +135,7 @@ export default function CategoryList() {
               <tr>
                 <th className="px-4 py-3 text-left">Ad</th>
                 <th className="px-4 py-3 text-left">Slug</th>
+                <th className="px-4 py-3 text-left">Sıra</th>
                 <th className="px-4 py-3 text-right">Əməliyyatlar</th>
               </tr>
             </thead>
@@ -117,8 +144,15 @@ export default function CategoryList() {
                 <tr key={item.id} className="border-t border-slate-100">
                   <td className="px-4 py-3 text-slate-800">{item.name}</td>
                   <td className="px-4 py-3 text-slate-600">{item.slug}</td>
+                  <td className="px-4 py-3 text-slate-600">{item.sort_order ?? "-"}</td>
                   <td className="px-4 py-3">
                     <div className="flex justify-end gap-2">
+                      <button onClick={() => moveCategory(item, "up")} className="rounded-lg p-2 text-slate-600 hover:bg-slate-100" title="Yuxarı">
+                        <ArrowUp className="h-4 w-4" />
+                      </button>
+                      <button onClick={() => moveCategory(item, "down")} className="rounded-lg p-2 text-slate-600 hover:bg-slate-100" title="Aşağı">
+                        <ArrowDown className="h-4 w-4" />
+                      </button>
                       <button
                         onClick={() => {
                           setEditing(item);

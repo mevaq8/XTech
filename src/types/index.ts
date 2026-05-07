@@ -13,6 +13,7 @@ export interface Product {
   category: string;
   category_id?: string;
   price: number;
+  sale_price?: number | null;
   stock: number;
   specs?: ProductSpecs;
   description?: string;

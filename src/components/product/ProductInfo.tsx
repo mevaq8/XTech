@@ -14,7 +14,11 @@ export default function ProductInfo({
   const [quantity, setQuantity] = useState(1);
   const [selectedVariantId, setSelectedVariantId] = useState<string>(variants[0]?.id ?? "");
   const selectedVariant = variants.find((item) => item.id === selectedVariantId) ?? variants[0];
-  const finalPrice = Number(product.price ?? 0) + Number(selectedVariant?.price_adjustment ?? 0);
+  const basePrice = Number(product.sale_price ?? product.price ?? 0);
+  const finalPrice = basePrice + Number(selectedVariant?.price_adjustment ?? 0);
+  const originalPrice = Number(product.price ?? 0) + Number(selectedVariant?.price_adjustment ?? 0);
+  const hasSale = typeof product.sale_price === "number" && product.sale_price > 0 && product.sale_price < product.price;
+  const discountPercent = hasSale ? Math.round(((originalPrice - finalPrice) / originalPrice) * 100) : 0;
   const finalStock = selectedVariant ? selectedVariant.stock : product.stock;
   const cartProduct: Product = {
     ...product,
@@ -35,10 +39,18 @@ export default function ProductInfo({
         </h1>
       </div>
 
-      <p className="font-sora font-bold text-3xl text-primary">
-        {finalPrice.toLocaleString("az-AZ")}{" "}
-        <span className="text-lg font-medium text-slate-400">AZN</span>
-      </p>
+      <div>
+        {hasSale ? (
+          <div className="mb-1 flex items-center gap-2">
+            <span className="text-sm text-slate-400 line-through">{originalPrice.toLocaleString("az-AZ")} AZN</span>
+            <span className="rounded bg-red-100 px-2 py-1 text-xs font-semibold text-red-700">-{discountPercent}%</span>
+          </div>
+        ) : null}
+        <p className={`font-sora font-bold text-3xl ${hasSale ? "text-red-600" : "text-primary"}`}>
+          {finalPrice.toLocaleString("az-AZ")}{" "}
+          <span className="text-lg font-medium text-slate-400">AZN</span>
+        </p>
+      </div>
 
       <p className="font-inter text-sm text-slate-600 leading-relaxed">
         {product.shortDescription ?? product.description}

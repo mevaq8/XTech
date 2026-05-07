@@ -35,9 +35,10 @@ export function useCategories() {
       setLoading(true);
       const fullRes = await supabase
         .from("categories")
-        .select("id,name,slug,image,is_active,created_at")
+        .select("id,name,slug,image,is_active,sort_order")
         .eq("is_active", true)
-        .order("created_at", { ascending: false });
+        .order("sort_order", { ascending: true })
+        .order("name", { ascending: true });
       if (!fullRes.error) {
         setCategories([ALL_CATEGORY, ...((fullRes.data ?? []) as HomeCategory[])]);
         setError(null);
@@ -46,7 +47,7 @@ export function useCategories() {
       }
 
       // Fallback for schemas without image/is_active/created_at columns.
-      const basicRes = await supabase.from("categories").select("id,name,slug").order("name");
+      const basicRes = await supabase.from("categories").select("id,name,slug").order("name", { ascending: true });
       if (basicRes.error) {
         setError(basicRes.error.message);
         setLoading(false);

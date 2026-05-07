@@ -7,6 +7,7 @@ interface ProductRow {
   name: string;
   description: string | null;
   price: number;
+  sale_price?: number | null;
   category_id: string | null;
   is_active: boolean;
   stock: number;
@@ -25,6 +26,7 @@ function toProduct(row: ProductRow): Product {
     description: row.description ?? "",
     shortDescription: (row.description ?? "").slice(0, 100),
     price: Number(row.price ?? 0),
+    sale_price: row.sale_price ?? null,
     stock: Number(row.stock ?? 0),
     category: row.categories?.slug ?? "other",
     category_id: row.category_id ?? undefined,
@@ -56,11 +58,16 @@ export function useProducts({ activeCategory, searchQuery }: { activeCategory: s
       if (activeCategory !== "all") {
         const categoryRes = await supabase.from("categories").select("id").eq("slug", activeCategory).maybeSingle();
         categoryId = categoryRes.data?.id ?? null;
+        if (!categoryId) {
+          setProducts([]);
+          setLoading(false);
+          return;
+        }
       }
 
       let query = supabase
         .from("products")
-        .select("id,name,description,price,category_id,is_active,stock,images,created_at,attributes,categories(name,slug)")
+        .select("id,name,description,price,sale_price,category_id,is_active,stock,images,created_at,attributes,categories(name,slug)")
         .eq("is_active", true)
         .order("created_at", { ascending: false });
 
@@ -76,7 +83,7 @@ export function useProducts({ activeCategory, searchQuery }: { activeCategory: s
       // Fallback for schemas without attributes/images relation aliases.
       let fallbackQuery = supabase
         .from("products")
-        .select("id,name,description,price,category_id,is_active,stock,created_at")
+        .select("id,name,description,price,discount_price,category_id,is_active,stock,created_at")
         .eq("is_active", true)
         .order("created_at", { ascending: false });
       if (categoryId) fallbackQuery = fallbackQuery.eq("category_id", categoryId);
@@ -101,6 +108,7 @@ export function useProducts({ activeCategory, searchQuery }: { activeCategory: s
 
       const normalized = (basicRes.data ?? []).map((row: any) => ({
         ...row,
+        sale_price: row.discount_price ?? null,
         images: [],
         attributes: null,
         categories: row.category_id ? categoryMap[row.category_id] ?? null : null,
