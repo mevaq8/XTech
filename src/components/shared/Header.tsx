@@ -3,13 +3,14 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import SearchBar from "./SearchBar";
 import CartIcon from "./CartIcon";
 import { useFilter } from "@/store/filter-store";
-import { categories } from "@/data/products";
+import { useCategories } from "@/hooks/useCategories";
 
 export default function Header() {
   const [menuOpen, setMenuOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const { setActiveCategory } = useFilter();
+  const { categories } = useCategories();
 
   useEffect(() => {
     setMenuOpen(false);

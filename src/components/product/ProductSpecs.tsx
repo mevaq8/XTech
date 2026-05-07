@@ -1,6 +1,4 @@
-import type { ProductSpecs } from "@/types";
-
-export default function ProductSpecs({ specs }: { specs: ProductSpecs }) {
+export default function ProductSpecs({ specs }: { specs: Record<string, string> }) {
   const entries = Object.entries(specs).filter(([, v]) => v && v !== "-");
 
   const labels: Record<string, string> = {

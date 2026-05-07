@@ -1,12 +1,13 @@
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Settings } from "lucide-react";
 import { useFilter } from "@/store/filter-store";
-import { categories } from "@/data/products";
+import { useCategories } from "@/hooks/useCategories";
 
 export default function Footer() {
   const navigate = useNavigate();
   const location = useLocation();
   const { setActiveCategory } = useFilter();
+  const { categories } = useCategories();
 
   const handleCategoryClick = (slug: string) => {
     if (location.pathname !== "/") {

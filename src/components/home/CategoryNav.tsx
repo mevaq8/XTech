@@ -1,14 +1,18 @@
 import { motion } from "framer-motion";
 import { useFilter } from "@/store/filter-store";
-import { categories } from "@/data/products";
+import { useCategories } from "@/hooks/useCategories";
 
 export default function CategoryNav() {
   const { activeCategory, setActiveCategory } = useFilter();
+  const { categories, loading } = useCategories();
 
   return (
     <section id="products" className="py-4 bg-bg sticky top-[64px] lg:top-[72px] z-40">
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex flex-nowrap gap-2 overflow-x-auto whitespace-nowrap pb-1 scrollbar-thin -mx-1 px-1 snap-x sm:snap-none snap-mandatory">
+          {loading ? (
+            <div className="px-4 py-2 text-sm text-slate-500">Kateqoriyalar yüklənir...</div>
+          ) : null}
           {categories.map((cat) => (
             <button
               key={cat.slug}

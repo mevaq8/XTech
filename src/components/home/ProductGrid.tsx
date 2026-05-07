@@ -1,28 +1,27 @@
 import { useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useFilter } from "@/store/filter-store";
-import { visibleProducts } from "@/data/products";
+import { useProducts } from "@/hooks/useProducts";
+import { useProductVariants } from "@/hooks/useProductVariants";
 import ProductCard from "@/components/shared/ProductCard";
 
 export default function ProductGrid() {
   const { searchQuery, activeCategory } = useFilter();
+  const { products, loading } = useProducts({ activeCategory, searchQuery });
+  const productIds = useMemo(() => products.map((p) => p.id), [products]);
+  const { byProductId } = useProductVariants(productIds);
 
-  const filtered = useMemo(() => {
-    return visibleProducts.filter((p) => {
-      const matchesCategory = activeCategory === "all" || p.category === activeCategory;
-      const matchesSearch =
-        searchQuery === "" ||
-        p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.shortDescription.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchesCategory && matchesSearch;
-    });
-  }, [searchQuery, activeCategory]);
+  const filtered = products;
 
   return (
     <section className="py-6 bg-bg">
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
         <AnimatePresence mode="wait">
-          {filtered.length === 0 ? (
+          {loading ? (
+            <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="text-center py-20">
+              <p className="text-slate-400 font-inter text-base">Məhsullar yüklənir...</p>
+            </motion.div>
+          ) : filtered.length === 0 ? (
             <motion.div
               key="empty"
               initial={{ opacity: 0 }}
@@ -43,7 +42,7 @@ export default function ProductGrid() {
             >
               <AnimatePresence>
                 {filtered.map((product) => (
-                  <ProductCard key={product.id} product={product} />
+                  <ProductCard key={product.id} product={product} variants={byProductId[product.id] ?? []} />
                 ))}
               </AnimatePresence>
             </motion.div>
